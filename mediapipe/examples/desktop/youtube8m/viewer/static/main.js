@@ -25,10 +25,10 @@ const STATE_SPINNER=2;
 * @param {string} param The name of the parameter.
 * @return {?string} The parameter value or null if there is no such parameter.
 */
-var getUrlParameter = function(param) {
+let getUrlParameter = function(param) {
     const url = decodeURIComponent(window.location.search.substring(1));
     const url_parts = url.split('&');
-    for (var i = 0; i < url_parts.length; i++) {
+    for (let i = 0; i < url_parts.length; i++) {
         const param_name = url_parts[i].split(/=(.*)/);
         if (param_name[0] === param) {
             return param_name[1] === undefined ? null : param_name[1];
@@ -43,7 +43,7 @@ const updateFormFromURL = function() {
   const form_elements = document.getElementById('form').elements;
   const url = decodeURIComponent(window.location.search.substring(1));
   const url_parts = url.split('&');
-  for (var i = 0; i < url_parts.length; i++) {
+  for (let i = 0; i < url_parts.length; i++) {
     const p = url_parts[i].split(/=(.*)/);
     if (p.length >= 2) {
       if (form_elements[p[0]]) {
@@ -99,7 +99,7 @@ function onStateChange(event) {
       const threshold =
           document.getElementById('form').elements['threshold'].value;
       let message = "";
-      for (var label of winner) {
+      for (let label of winner) {
         if (label.score >= threshold) {
           message =  `${message}${label.label} (score: ${label.score})\n`;
         }
