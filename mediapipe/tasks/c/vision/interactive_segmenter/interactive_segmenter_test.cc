@@ -15,16 +15,19 @@ limitations under the License.
 
 #include "mediapipe/tasks/c/vision/interactive_segmenter/interactive_segmenter.h"
 
+#include <cstdlib>
 #include <string>
 
 #include "absl/flags/flag.h"
 #include "absl/strings/string_view.h"
 #include "mediapipe/framework/deps/file_path.h"
+#include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
+#include "mediapipe/framework/port/status_matchers.h"
 #include "mediapipe/tasks/c/components/containers/keypoint.h"
+#include "mediapipe/tasks/c/core/common.h"
 #include "mediapipe/tasks/c/core/mp_status.h"
 #include "mediapipe/tasks/c/test/test_utils.h"
-#include "mediapipe/tasks/c/vision/core/common.h"
 #include "mediapipe/tasks/c/vision/core/image.h"
 #include "mediapipe/tasks/c/vision/core/image_processing_options.h"
 #include "mediapipe/tasks/c/vision/core/image_test_util.h"
@@ -42,6 +45,7 @@ using ::mediapipe::tasks::vision::core::GetImage;
 using ::mediapipe::tasks::vision::core::ScopedMpImage;
 
 constexpr char kTestDataDirectory[] = "/mediapipe/tasks/testdata/vision/";
+
 constexpr char kModelName[] = "ptm_512_hdt_ptm_woid.tflite";
 constexpr char kImageFile[] = "penguins_large.jpg";
 constexpr char kMaskImageFile[] = "penguins_large_mask.png";
@@ -70,7 +74,9 @@ TEST(InteractiveSegmenterTest,
   };
 
   MpInteractiveSegmenterPtr segmenter;
-  ASSERT_EQ(MpInteractiveSegmenterCreate(&options, &segmenter), kMpOk);
+  ASSERT_EQ(MpInteractiveSegmenterCreate(&options, &segmenter,
+                                         /* error_msg= */ nullptr),
+            kMpOk);
 
   ImageSegmenterResult result;
 
@@ -85,10 +91,12 @@ TEST(InteractiveSegmenterTest,
 
   ASSERT_EQ(MpInteractiveSegmenterSegmentImage(
                 segmenter, image.get(), &roi,
-                /* image_processing_options= */ nullptr, &result),
+                /* image_processing_options= */ nullptr, &result,
+                /* error_msg= */ nullptr),
             kMpOk);
 
-  auto expected_mask_image = DecodeImageFromFile(GetFullPath(kMaskImageFile));
+  MP_ASSERT_OK_AND_ASSIGN(auto expected_mask_image,
+                          DecodeImageFromFile(GetFullPath(kMaskImageFile)));
   const ScopedMpImage expected_mask{
       CreateCategoryMaskFromImage(expected_mask_image)};
   const MpImagePtr actual_mask = result.category_mask;
@@ -96,7 +104,8 @@ TEST(InteractiveSegmenterTest,
                                kGoldenMaskMagnificationFactor),
             0.9f);
   MpInteractiveSegmenterCloseResult(&result);
-  ASSERT_EQ(MpInteractiveSegmenterClose(segmenter), kMpOk);
+  ASSERT_EQ(MpInteractiveSegmenterClose(segmenter, /* error_msg= */ nullptr),
+            kMpOk);
 }
 
 // Test here fails since the model metadata has no Activation type.
@@ -115,7 +124,9 @@ TEST(InteractiveSegmenterTest,
   };
 
   MpInteractiveSegmenterPtr segmenter;
-  ASSERT_EQ(MpInteractiveSegmenterCreate(&options, &segmenter), kMpOk);
+  ASSERT_EQ(MpInteractiveSegmenterCreate(&options, &segmenter,
+                                         /* error_msg= */ nullptr),
+            kMpOk);
 
   ImageSegmenterResult result;
 
@@ -131,10 +142,12 @@ TEST(InteractiveSegmenterTest,
 
   ASSERT_EQ(MpInteractiveSegmenterSegmentImage(
                 segmenter, image.get(), &roi,
-                /* image_processing_options= */ nullptr, &result),
+                /* image_processing_options= */ nullptr, &result,
+                /* error_msg= */ nullptr),
             kMpOk);
 
-  auto expected_mask_image = DecodeImageFromFile(GetFullPath(kMaskImageFile));
+  MP_ASSERT_OK_AND_ASSIGN(auto expected_mask_image,
+                          DecodeImageFromFile(GetFullPath(kMaskImageFile)));
   const ScopedMpImage expected_mask(
       CreateCategoryMaskFromImage(expected_mask_image));
   const MpImagePtr actual_mask = result.category_mask;
@@ -142,7 +155,8 @@ TEST(InteractiveSegmenterTest,
                                kGoldenMaskMagnificationFactor),
             0.84f);
   MpInteractiveSegmenterCloseResult(&result);
-  ASSERT_EQ(MpInteractiveSegmenterClose(segmenter), kMpOk);
+  ASSERT_EQ(MpInteractiveSegmenterClose(segmenter, /* error_msg= */ nullptr),
+            kMpOk);
 }
 
 TEST(InteractiveSegmenterTest, ImageModeTestWithRotation) {
@@ -159,7 +173,9 @@ TEST(InteractiveSegmenterTest, ImageModeTestWithRotation) {
   };
 
   MpInteractiveSegmenterPtr segmenter;
-  ASSERT_EQ(MpInteractiveSegmenterCreate(&options, &segmenter), kMpOk);
+  ASSERT_EQ(MpInteractiveSegmenterCreate(&options, &segmenter,
+                                         /* error_msg= */ nullptr),
+            kMpOk);
 
   ImageSegmenterResult result;
 
@@ -175,12 +191,13 @@ TEST(InteractiveSegmenterTest, ImageModeTestWithRotation) {
   ImageProcessingOptions image_processing_options = {
       .has_region_of_interest = false, .rotation_degrees = -90};
 
-  ASSERT_EQ(
-      MpInteractiveSegmenterSegmentImage(segmenter, image.get(), &roi,
-                                         &image_processing_options, &result),
-      kMpOk);
+  ASSERT_EQ(MpInteractiveSegmenterSegmentImage(
+                segmenter, image.get(), &roi, &image_processing_options,
+                &result, /* error_msg= */ nullptr),
+            kMpOk);
 
-  auto expected_mask_image = DecodeImageFromFile(GetFullPath(kMaskImageFile));
+  MP_ASSERT_OK_AND_ASSIGN(auto expected_mask_image,
+                          DecodeImageFromFile(GetFullPath(kMaskImageFile)));
   const ScopedMpImage expected_mask(
       CreateCategoryMaskFromImage(expected_mask_image));
   const MpImagePtr actual_mask = result.category_mask;
@@ -188,7 +205,8 @@ TEST(InteractiveSegmenterTest, ImageModeTestWithRotation) {
                                kGoldenMaskMagnificationFactor),
             0.9f);
   MpInteractiveSegmenterCloseResult(&result);
-  ASSERT_EQ(MpInteractiveSegmenterClose(segmenter), kMpOk);
+  ASSERT_EQ(MpInteractiveSegmenterClose(segmenter, /* error_msg= */ nullptr),
+            kMpOk);
 }
 
 TEST(InteractiveSegmenterTest, InvalidArgumentHandling) {
@@ -201,11 +219,16 @@ TEST(InteractiveSegmenterTest, InvalidArgumentHandling) {
       .output_category_mask = true,
   };
 
+  char* error_msg = nullptr;
   MpInteractiveSegmenterPtr segmenter = nullptr;
-  MpStatus status = MpInteractiveSegmenterCreate(&options, &segmenter);
+  MpStatus status =
+      MpInteractiveSegmenterCreate(&options, &segmenter, &error_msg);
+  EXPECT_EQ(status, kMpInvalidArgument);
   EXPECT_EQ(segmenter, nullptr);
 
-  EXPECT_EQ(status, kMpInvalidArgument);
+  EXPECT_THAT(error_msg,
+              testing::HasSubstr("ExternalFile must specify at least one"));
+  MpErrorFree(error_msg);
 }
 
 TEST(InteractiveSegmenterTest, FailedRecognitionHandling) {
@@ -219,7 +242,9 @@ TEST(InteractiveSegmenterTest, FailedRecognitionHandling) {
   };
 
   MpInteractiveSegmenterPtr segmenter;
-  ASSERT_EQ(MpInteractiveSegmenterCreate(&options, &segmenter), kMpOk);
+  ASSERT_EQ(MpInteractiveSegmenterCreate(&options, &segmenter,
+                                         /* error_msg= */ nullptr),
+            kMpOk);
 
   const ScopedMpImage mp_image = CreateEmptyGpuMpImage();
   ImageSegmenterResult result;
@@ -231,11 +256,18 @@ TEST(InteractiveSegmenterTest, FailedRecognitionHandling) {
                           .scribble = nullptr,
                           .scribble_count = 0};
 
+  char* error_msg = nullptr;
   MpStatus status = MpInteractiveSegmenterSegmentImage(
       segmenter, mp_image.get(), &roi,
-      /* image_processing_options= */ nullptr, &result);
+      /* image_processing_options= */ nullptr, &result, &error_msg);
   EXPECT_EQ(status, kMpInvalidArgument);
-  ASSERT_EQ(MpInteractiveSegmenterClose(segmenter), kMpOk);
+  EXPECT_THAT(error_msg,
+              testing::HasSubstr("GPU input images are currently not "
+                                 "supported."));
+  MpErrorFree(error_msg);
+
+  EXPECT_EQ(MpInteractiveSegmenterClose(segmenter, /* error_msg= */ nullptr),
+            kMpOk);
 }
 
 }  // namespace

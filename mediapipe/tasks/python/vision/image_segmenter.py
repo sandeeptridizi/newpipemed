@@ -21,6 +21,7 @@ from mediapipe.tasks.python.core import async_result_dispatcher
 from mediapipe.tasks.python.core import base_options as base_options_module
 from mediapipe.tasks.python.core import base_options_c
 from mediapipe.tasks.python.core import mediapipe_c_bindings
+from mediapipe.tasks.python.core import mediapipe_c_utils
 from mediapipe.tasks.python.core import serial_dispatcher
 from mediapipe.tasks.python.core.optional_dependencies import doc_controls
 from mediapipe.tasks.python.vision.core import image as image_module
@@ -31,7 +32,6 @@ from mediapipe.tasks.python.vision.core import vision_task_running_mode as runni
 _BaseOptions = base_options_module.BaseOptions
 _ImageProcessingOptions = image_processing_options_module.ImageProcessingOptions
 _RunningMode = running_mode_module.VisionTaskRunningMode
-_CFunction = mediapipe_c_bindings.CFunction
 _AsyncResultDispatcher = async_result_dispatcher.AsyncResultDispatcher
 
 
@@ -95,66 +95,58 @@ class ImageSegmenterOptionsC(ctypes.Structure):
 
 
 _CTYPES_SIGNATURES = (
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpImageSegmenterCreate',
-        [
+        (
             ctypes.POINTER(ImageSegmenterOptionsC),
             ctypes.POINTER(ctypes.c_void_p),  # Output param for segmenter
-        ],
-        ctypes.c_int,  # MpStatus
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpImageSegmenterSegmentImage',
-        [
+        (
             ctypes.c_void_p,
             ctypes.c_void_p,
             ctypes.POINTER(image_processing_options_c.ImageProcessingOptionsC),
             ctypes.POINTER(ImageSegmenterResultC),
-        ],
-        ctypes.c_int,  # MpStatus
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpImageSegmenterSegmentForVideo',
-        [
+        (
             ctypes.c_void_p,
             ctypes.c_void_p,
             ctypes.POINTER(image_processing_options_c.ImageProcessingOptionsC),
             ctypes.c_int64,
             ctypes.POINTER(ImageSegmenterResultC),
-        ],
-        ctypes.c_int,  # MpStatus
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpImageSegmenterSegmentAsync',
-        [
+        (
             ctypes.c_void_p,
             ctypes.c_void_p,
             ctypes.POINTER(image_processing_options_c.ImageProcessingOptionsC),
             ctypes.c_int64,
-        ],
-        ctypes.c_int,  # MpStatus
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpImageSegmenterGetLabels',
-        [
+        (
             ctypes.c_void_p,
             ctypes.POINTER(MpStringListC),
-        ],
-        ctypes.c_int,  # MpStatus
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CFunction(
         'MpImageSegmenterCloseResult',
         [ctypes.POINTER(ImageSegmenterResultC)],
         None,
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpImageSegmenterClose',
-        [
-            ctypes.c_void_p,
-        ],
-        ctypes.c_int,  # MpStatus
+        (ctypes.c_void_p,),
     ),
-    _CFunction(
+    mediapipe_c_utils.CFunction(
         'MpStringListFree',
         [
             ctypes.c_void_p,
@@ -224,9 +216,9 @@ class ImageSegmenterOptions:
   running_mode: _RunningMode = _RunningMode.IMAGE
   output_confidence_masks: bool = True
   output_category_mask: bool = False
-  result_callback: (
-      Callable[[ImageSegmenterResult, image_module.Image, int], None] | None
-  ) = None
+  result_callback: Optional[
+      Callable[[ImageSegmenterResult, image_module.Image, int], None]
+  ] = None
 
 
 class ImageSegmenter:
@@ -352,10 +344,9 @@ class ImageSegmenter:
         result_callback=c_callback,
     )
     segmenter_handle = ctypes.c_void_p()
-    status = lib.MpImageSegmenterCreate(
+    lib.MpImageSegmenterCreate(
         ctypes.byref(c_options), ctypes.byref(segmenter_handle)
     )
-    mediapipe_c_bindings.handle_status(status)
     return cls(
         lib=lib,
         handle=segmenter_handle,
@@ -392,13 +383,12 @@ class ImageSegmenter:
         if image_processing_options
         else None
     )
-    status = self._lib.MpImageSegmenterSegmentImage(
+    self._lib.MpImageSegmenterSegmentImage(
         self._handle,
         c_image,
         options_c,
         ctypes.byref(c_result),
     )
-    mediapipe_c_bindings.handle_status(status)
     result = ImageSegmenterResult.from_ctypes(c_result)
     self._lib.MpImageSegmenterCloseResult(ctypes.byref(c_result))
     return result
@@ -407,7 +397,7 @@ class ImageSegmenter:
       self,
       image: image_module.Image,
       timestamp_ms: int,
-      image_processing_options: _ImageProcessingOptions | None = None,
+      image_processing_options: Optional[_ImageProcessingOptions] = None,
   ) -> ImageSegmenterResult:
     """Performs segmentation on the provided video frames.
 
@@ -439,14 +429,13 @@ class ImageSegmenter:
         if image_processing_options
         else None
     )
-    status = self._lib.MpImageSegmenterSegmentForVideo(
+    self._lib.MpImageSegmenterSegmentForVideo(
         self._handle,
         c_image,
         options_c,
         timestamp_ms,
         ctypes.byref(c_result),
     )
-    mediapipe_c_bindings.handle_status(status)
     result = ImageSegmenterResult.from_ctypes(c_result)
     self._lib.MpImageSegmenterCloseResult(ctypes.byref(c_result))
     return result
@@ -455,7 +444,7 @@ class ImageSegmenter:
       self,
       image: image_module.Image,
       timestamp_ms: int,
-      image_processing_options: _ImageProcessingOptions | None = None,
+      image_processing_options: Optional[_ImageProcessingOptions] = None,
   ) -> None:
     """Sends live image data (an Image with a unique timestamp) to perform image segmentation.
 
@@ -490,13 +479,12 @@ class ImageSegmenter:
         if image_processing_options
         else None
     )
-    status = self._lib.MpImageSegmenterSegmentAsync(
+    self._lib.MpImageSegmenterSegmentAsync(
         self._handle,
         c_image,
         options_c,
         timestamp_ms,
     )
-    mediapipe_c_bindings.handle_status(status)
 
   @property
   def labels(self) -> list[str]:
@@ -512,11 +500,10 @@ class ImageSegmenter:
     """
     if not self._labels:
       c_labels = MpStringListC()
-      status = self._lib.MpImageSegmenterGetLabels(
+      self._lib.MpImageSegmenterGetLabels(
           self._handle,
           ctypes.byref(c_labels),
       )
-      mediapipe_c_bindings.handle_status(status)
       self._labels = []
       for i in range(c_labels.num_strings):
         c_label = c_labels.strings[i]
@@ -527,9 +514,9 @@ class ImageSegmenter:
 
   def close(self):
     """Closes ImageSegmenter."""
-    if self._handle:
-      status = self._lib.MpImageSegmenterClose(self._handle)
-      mediapipe_c_bindings.handle_status(status)
+    if not self._handle:
+      return
+    self._lib.MpImageSegmenterClose(self._handle)
     self._handle = None
     self._dispatcher.close()
     self._lib.close()

@@ -25,6 +25,13 @@ cc_library(
 )
 
 cc_library(
+    name = "common",
+    srcs = ["common.cc"],
+    hdrs = ["common.h"],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "base_options_converter",
     srcs = ["base_options_converter.cc"],
     hdrs = ["base_options_converter.h"],
@@ -57,7 +64,6 @@ cc_library(
     hdrs = ["mp_status_converter.h"],
     deps = [
         ":mp_status",
-        "@com_google_absl//absl/log:absl_log",
         "@com_google_absl//absl/status",
     ],
 )

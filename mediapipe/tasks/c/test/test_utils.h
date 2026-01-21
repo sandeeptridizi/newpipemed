@@ -22,7 +22,7 @@ limitations under the License.
 
 namespace mediapipe::tasks::c::test {
 
-MpImagePtr CreateCategoryMaskFromImage(absl::StatusOr<Image>& image);
+MpImagePtr CreateCategoryMaskFromImage(const Image& image);
 
 float SimilarToUint8Mask(MpImageInternal* actual_mask,
                          MpImageInternal* expected_mask,

@@ -20,6 +20,7 @@ licenses(["notice"])
 
 cc_library(
     name = "test_utils",
+    testonly = 1,
     srcs = ["test_utils.cc"],
     hdrs = ["test_utils.h"],
     linkstatic = 1,
@@ -29,6 +30,5 @@ cc_library(
         "//mediapipe/tasks/c/vision/core:image",
         "//mediapipe/tasks/c/vision/core:image_frame_util",
         "@com_google_absl//absl/log:absl_log",
-        "@com_google_absl//absl/status:statusor",
     ],
 )

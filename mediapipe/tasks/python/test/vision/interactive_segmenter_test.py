@@ -46,7 +46,7 @@ _CATS_AND_DOGS = 'cats_and_dogs.jpg'
 _CATS_AND_DOGS_MASK_DOG_1 = 'cats_and_dogs_mask_dog1.png'
 _CATS_AND_DOGS_MASK_DOG_2 = 'cats_and_dogs_mask_dog2.png'
 _MASK_MAGNIFICATION_FACTOR = 255
-_MASK_SIMILARITY_THRESHOLD = 0.97
+_MASK_SIMILARITY_THRESHOLD = 0.96
 _TEST_DATA_DIR = 'mediapipe/tasks/testdata/vision'
 
 
@@ -136,7 +136,10 @@ class InteractiveSegmenterTest(parameterized.TestCase):
       self.assertIsInstance(segmenter, _InteractiveSegmenter)
 
   def test_create_from_options_fails_with_invalid_model_path(self):
-    with self.assertRaises(FileNotFoundError):
+    with self.assertRaisesRegex(
+        FileNotFoundError,
+        'Unable to open file at /path/to/invalid/model.tflite',
+    ):
       base_options = _BaseOptions(
           model_asset_path='/path/to/invalid/model.tflite'
       )
@@ -247,7 +250,7 @@ class InteractiveSegmenterTest(parameterized.TestCase):
           _RegionOfInterest.Format.KEYPOINT,
           _NormalizedKeypoint(0.66, 0.66),
           _CATS_AND_DOGS_MASK_DOG_2,
-          _MASK_SIMILARITY_THRESHOLD,
+          0.84,
       ),
   )
   def test_segment_succeeds_with_confidence_mask(

@@ -13,25 +13,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef MEDIAPIPE_TASKS_C_VISION_CORE_COMMON_H_
-#define MEDIAPIPE_TASKS_C_VISION_CORE_COMMON_H_
+#ifndef MEDIAPIPE_TASKS_C_CORE_COMMON_H_
+#define MEDIAPIPE_TASKS_C_CORE_COMMON_H_
 
 #include <cstdint>
 
 #ifndef MP_EXPORT
+#if defined(_MSC_VER)
+#define MP_EXPORT __declspec(dllexport)
+#else
 #define MP_EXPORT __attribute__((visibility("default")))
+#endif  // _WIN32
 #endif  // MP_EXPORT
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-// Supported processing modes.
-enum RunningMode {
-  IMAGE = 1,
-  VIDEO = 2,
-  LIVE_STREAM = 3,
-};
 
 // Represents a list of strings.
 typedef struct {
@@ -44,8 +41,11 @@ typedef struct {
 // Frees an MpStringList.
 MP_EXPORT void MpStringListFree(MpStringList* string_list);
 
+// Frees an error message.
+MP_EXPORT void MpErrorFree(char* error_message);
+
 #ifdef __cplusplus
 }  // extern C
 #endif
 
-#endif  // MEDIAPIPE_TASKS_C_VISION_CORE_COMMON_H_
+#endif  // MEDIAPIPE_TASKS_C_CORE_COMMON_H_

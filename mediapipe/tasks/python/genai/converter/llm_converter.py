@@ -1,3 +1,17 @@
+# Copyright 2024 The MediaPipe Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Functions to perform the checkpoint conversion."""
 
 import contextlib
@@ -6,30 +20,32 @@ import os
 from typing import Any, List, Optional
 
 from absl import logging
-from jax import numpy as jnp
 import numpy as np
 
 from mediapipe.tasks.python.core import mediapipe_c_bindings
+from mediapipe.tasks.python.core import mediapipe_c_utils
+from mediapipe.tasks.python.core import serial_dispatcher
 from mediapipe.tasks.python.genai.converter import converter_base
 from mediapipe.tasks.python.genai.converter import converter_factory
+from mediapipe.tasks.python.genai.converter import external_dependencies
 from mediapipe.tasks.python.genai.converter import quantization_util
 
+jnp = external_dependencies.jnp
 
 _CTYPES_SIGNATURES = (
-    mediapipe_c_bindings.CFunction(
+    mediapipe_c_utils.CStatusFunction(
         func_name='MpLlmConverterGenerateCpuTfLite',
-        argtypes=[
+        core_argtypes=(
             ctypes.c_char_p,  # model_type
             ctypes.c_char_p,  # weight_path
             ctypes.c_char_p,  # vocab_model_file
             ctypes.c_bool,  # is_quantized
             ctypes.c_char_p,  # output_tflite_file
-        ],
-        restype=mediapipe_c_bindings.MpStatus,
+        ),
     ),
-    mediapipe_c_bindings.CFunction(
+    mediapipe_c_utils.CStatusFunction(
         func_name='MpLlmConverterGenerateGpuTfLite',
-        argtypes=[
+        core_argtypes=(
             ctypes.c_char_p,  # model_type
             ctypes.c_char_p,  # weight_path
             ctypes.c_char_p,  # vocab_model_file
@@ -45,16 +61,15 @@ _CTYPES_SIGNATURES = (
             ctypes.c_char_p,  # submodel_type
             ctypes.c_bool,  # use_dynamic_ple
             ctypes.c_bool,  # apply_srq
-        ],
-        restype=mediapipe_c_bindings.MpStatus,
+            ctypes.c_int,  # block_size
+        ),
     ),
-    mediapipe_c_bindings.CFunction(
+    mediapipe_c_utils.CStatusFunction(
         func_name='MpLlmConverterConvertHfTokenizer',
-        argtypes=[
+        core_argtypes=(
             ctypes.c_char_p,  # vocab_model_file
             ctypes.c_char_p,  # output_vocab_file
-        ],
-        restype=mediapipe_c_bindings.MpStatus,
+        ),
     ),
 )
 
@@ -114,6 +129,8 @@ class ConversionConfig(object):
       Default is true, which will cause embeddings to only be loaded into VRAM
       on demand.
     use_mse_quant: Whether to use MSE quantization for recomputing scales.
+    block_size: Default of 0 is off. Can also be 32 or 128, for using blockwise
+      Q4_0 compression on the models and layers which support this.
   """
 
   def __init__(
@@ -133,6 +150,7 @@ class ConversionConfig(object):
       obfuscate: bool = False,
       output_tflite_file: Optional[str] = None,
       fp16_scale: Optional[float] = None,
+      block_size: int = 0,
       lora_ckpt: Optional[str] = None,
       lora_rank: Optional[int] = None,
       lora_alpha: Optional[float] = None,
@@ -179,6 +197,10 @@ class ConversionConfig(object):
       self.output_tflite_file = os.path.join(output_dir, 'model.tflite')
 
     self.fp16_scale = None
+    if block_size not in (0, 32, 128):
+      raise ValueError('Block size must be one of (0 (off), 32, 128)')
+    else:
+      self.block_size = block_size
     self.lora_ckpt = lora_ckpt
     self.lora_rank = lora_rank
     self.lora_alpha = lora_alpha
@@ -223,7 +245,7 @@ class _LlmConverter:
   """Bundles all conversion logic for LLM models."""
 
   def __init__(self, lib: Any):
-    self._lib = lib
+    self._lib = serial_dispatcher.SerialDispatcher(lib, _CTYPES_SIGNATURES)
 
   def quantize_by_actions(
       self,
@@ -231,6 +253,7 @@ class _LlmConverter:
       backend: str,
       is_symmetric: bool,
       use_mse_quant: bool = False,
+      block_size: int = 0,
   ):
     """Quantizes the weights by actions.
 
@@ -240,6 +263,8 @@ class _LlmConverter:
       backend: Target backend to run the model. Can be either "cpu" or "gpu".
       is_symmetric: Whether to quantize symmetrically.
       use_mse_quant: Whether to use MSE quantization for recomputing scales.
+      block_size: 0 to disable, and 32 or 128 to use blockwise Q4_0 for
+        recomputing scales.
 
     Returns:
       A dictionary that maps from the updated tensor names to the quantized
@@ -290,7 +315,12 @@ class _LlmConverter:
         else:
           output_tensors[action.target_name] = (action.tensor_value, False)
       if action.quantize_axis:
-        pack = action.quantize_bits == 4
+        quant_bits = action.quantize_bits
+        if block_size > 0 and quant_bits == 4 and action.quantize_axis[0] != 0:
+          # Turn off 4bit blockwise quant for quant axis = 1 case.
+          quant_bits = 8
+        pack = quant_bits == 4
+
         if action.tensor_value.dtype == np.int8:
           if backend == 'cpu' and pack:
             raise ValueError(
@@ -300,13 +330,25 @@ class _LlmConverter:
           output_tensors[action.target_name] = (action.tensor_value, pack)
         else:
           if is_symmetric:
+            # Only support block quant for quant axis 0 for now.
+            use_block_size = pack and action.quantize_axis[0] == 0
+            bs = block_size if use_block_size else 0
             target_var, scale = quantization_util.quantize_tensor(
                 var=action.tensor_value,
                 axis=action.quantize_axis,
                 sym=is_symmetric,
-                number_bits=action.quantize_bits,
+                number_bits=quant_bits,
                 use_mse_quant=use_mse_quant,
+                # blockwise quant applies to symmetric 4bit only
+                block_size=bs,
             )
+            if bs > 0:
+              # Reshape and transpose output from blockwise quant.
+              # We want per-block scale values as the last dimension.
+              scale = scale.transpose()
+              # Reshape to fold in the per-block dimension
+              orig_shape = target_var.shape
+              target_var = target_var.reshape(-1, orig_shape[-1])
             output_tensors[action.target_name] = (target_var, pack)
             output_tensors[action.target_name + scale_suffix] = (
                 scale,
@@ -350,21 +392,21 @@ class _LlmConverter:
       submodel_type: Optional[str] = None,
       use_dynamic_ple: Optional[bool] = None,
       apply_srq: Optional[bool] = None,
+      block_size: int = 0,
   ):
     """Combines weight files to tflite file."""
     if backend == 'cpu':
       if lora_rank is not None:
         logging.fatal('LoRA is not supported for CPU backend.')
-      status = self._lib.MpLlmConverterGenerateCpuTfLite(
+      self._lib.MpLlmConverterGenerateCpuTfLite(
           model_type.encode('utf-8'),
           weight_path.encode('utf-8'),
           vocab_model_file.encode('utf-8'),
           True,
           output_tflite_file.encode('utf-8'),
       )
-      mediapipe_c_bindings.handle_status(status)
     elif backend == 'gpu':
-      status = self._lib.MpLlmConverterGenerateGpuTfLite(
+      self._lib.MpLlmConverterGenerateGpuTfLite(
           model_type.encode('utf-8'),
           weight_path.encode('utf-8'),
           vocab_model_file.encode('utf-8'),
@@ -380,8 +422,8 @@ class _LlmConverter:
           _safe_encode_str(submodel_type),
           True if use_dynamic_ple is None else use_dynamic_ple,
           False if apply_srq is None else apply_srq,
+          block_size,
       )
-      mediapipe_c_bindings.handle_status(status)
     else:
       raise ValueError(f'Unsupported backend: {backend}')
 
@@ -401,11 +443,10 @@ class _LlmConverter:
           ' that contains both tokenizer.json and tokenizer_config.json files.'
       )
     output_vocab_file = os.path.join(output_dir, 'spm.model')
-    status = self._lib.MpLlmConverterConvertHfTokenizer(
+    self._lib.MpLlmConverterConvertHfTokenizer(
         vocab_model_file.encode('utf-8'),
         output_vocab_file.encode('utf-8'),
     )
-    mediapipe_c_bindings.handle_status(status)
     return output_vocab_file
 
   def sort_layer_info(self, layer_info_file: str) -> None:
@@ -434,7 +475,11 @@ class _LlmConverter:
     for action in actions:
       # Quantize the weight
       quantized_tensors = self.quantize_by_actions(
-          action, config.backend, config.is_symmetric, config.use_mse_quant
+          action,
+          config.backend,
+          config.is_symmetric,
+          config.use_mse_quant,
+          block_size=config.block_size,
       )
       del action
       # Write the tensors into file(s).
@@ -509,13 +554,29 @@ class _LlmConverter:
         use_dynamic_ple=config.use_dynamic_ple,
         # Fow now, any pre-quantized model is assumed to require SRQ support.
         apply_srq=config.is_quantized,
+        block_size=config.block_size,
     )
+
+  def __enter__(self) -> '_LlmConverter':
+    """Returns `self` upon entering the runtime context."""
+    return self
+
+  def __exit__(self, *args) -> None:
+    """Shuts down the LlmConverter on exit of the context manager.
+
+    Args:
+      *args: Unused.
+    Raises:
+      RuntimeError: If the LLM converter failed to close.
+    """
+    del args  # Unused.
+    self._lib.close()
 
 
 def convert_checkpoint(config: ConversionConfig) -> None:
   """Converts the checkpoint to tflite file."""
-  with mediapipe_c_bindings.load_shared_library(_CTYPES_SIGNATURES) as lib:
-    converter = _LlmConverter(lib)
+  lib = mediapipe_c_bindings.load_raw_library(_CTYPES_SIGNATURES)
+  with _LlmConverter(lib) as converter:
     converter.convert_checkpoint(config)
 
 
@@ -539,8 +600,8 @@ def quantize_by_actions(
     tensor values + a boolean that indicates whether the tensor values need to
     be packed (only applicable for the 4-bit quantized weights).
   """
-  with mediapipe_c_bindings.load_shared_library(_CTYPES_SIGNATURES) as lib:
-    converter = _LlmConverter(lib)
+  lib = mediapipe_c_bindings.load_raw_library(_CTYPES_SIGNATURES)
+  with _LlmConverter(lib) as converter:
     return converter.quantize_by_actions(
         actions, backend, is_symmetric, use_mse_quant
     )
