@@ -1,4 +1,4 @@
-# Copyright 2022 The MediaPipe Authors. All Rights Reserved.
+# Copyright 2022 The MediaPipe Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,11 +19,11 @@ from unittest import mock
 
 from absl.testing import absltest
 from absl.testing import parameterized
-
 import numpy as np
 from scipy.io import wavfile
 
 from mediapipe.tasks.python.audio import audio_classifier
+from mediapipe.tasks.python.audio.core import audio_record
 from mediapipe.tasks.python.audio.core import audio_task_running_mode
 from mediapipe.tasks.python.components.containers import audio_data as audio_data_module
 from mediapipe.tasks.python.components.containers import classification_result as classification_result_module
@@ -34,6 +34,7 @@ _AudioClassifier = audio_classifier.AudioClassifier
 _AudioClassifierOptions = audio_classifier.AudioClassifierOptions
 _AudioClassifierResult = classification_result_module.ClassificationResult
 _AudioData = audio_data_module.AudioData
+_AudioRecord = audio_record.AudioRecord
 _BaseOptions = base_options_module.BaseOptions
 _RUNNING_MODE = audio_task_running_mode.AudioTaskRunningMode
 
@@ -46,7 +47,7 @@ _TEST_DATA_DIR = 'mediapipe/tasks/testdata/audio'
 _TWO_HEADS_WAV_16K_MONO = 'two_heads_16000_hz_mono.wav'
 _TWO_HEADS_WAV_44K_MONO = 'two_heads_44100_hz_mono.wav'
 _YAMNET_NUM_OF_SAMPLES = 15600
-_MILLSECONDS_PER_SECOND = 1000
+_MILLISECONDS_PER_SECOND = 1000
 
 
 class AudioClassifierTest(parameterized.TestCase):
@@ -74,7 +75,7 @@ class AudioClassifierTest(parameterized.TestCase):
       end = min(start + (int)(step_size), len(buffer))
       audio_data_list.append((_AudioData.create_from_array(
           buffer[start:end].astype(float) / np.iinfo(np.int16).max,
-          sample_rate), (int)(start / sample_rate * _MILLSECONDS_PER_SECOND)))
+          sample_rate), (int)(start / sample_rate * _MILLISECONDS_PER_SECOND)))
       start = end
     return audio_data_list
 
@@ -172,12 +173,12 @@ class AudioClassifierTest(parameterized.TestCase):
       self.assertIsInstance(classifier, _AudioClassifier)
 
   def test_create_from_options_fails_with_invalid_model_path(self):
-    with self.assertRaisesRegex(
-        RuntimeError, 'Unable to open file at /path/to/invalid/model.tflite'):
+    with self.assertRaisesRegex(FileNotFoundError, 'Not found'):
       base_options = _BaseOptions(
           model_asset_path='/path/to/invalid/model.tflite')
       options = _AudioClassifierOptions(base_options=base_options)
-      _AudioClassifier.create_from_options(options)
+      classifier = _AudioClassifier.create_from_options(options)
+      classifier.close()
 
   def test_create_from_options_succeeds_with_valid_model_content(self):
     # Creates with options containing model content successfully.
@@ -186,6 +187,7 @@ class AudioClassifierTest(parameterized.TestCase):
       options = _AudioClassifierOptions(base_options=base_options)
       classifier = _AudioClassifier.create_from_options(options)
       self.assertIsInstance(classifier, _AudioClassifier)
+      classifier.close()
 
   @parameterized.parameters((_SPEECH_WAV_16K_MONO), (_SPEECH_WAV_48K_MONO))
   def test_classify_with_yamnet_model(self, audio_file):
@@ -203,6 +205,19 @@ class AudioClassifierTest(parameterized.TestCase):
         classification_result_list = classifier.classify(
             self._read_wav_file(audio_file))
         self._check_yamnet_result(classification_result_list)
+
+  @mock.patch('sounddevice.InputStream', return_value=mock.MagicMock())
+  def test_create_audio_record_from_classifier_succeeds(self, _):
+    # Creates AudioRecord instance using the classifier successfully.
+    with _AudioClassifier.create_from_model_path(
+        self.yamnet_model_path
+    ) as classifier:
+      self.assertIsInstance(classifier, _AudioClassifier)
+      record = classifier.create_audio_record(1, 16000, 16000)
+      self.assertIsInstance(record, _AudioRecord)
+      self.assertEqual(record.channels, 1)
+      self.assertEqual(record.sampling_rate, 16000)
+      self.assertEqual(record.buffer_size, 16000)
 
   def test_max_result_options(self):
     with _AudioClassifier.create_from_options(
@@ -239,10 +254,7 @@ class AudioClassifierTest(parameterized.TestCase):
 
   def test_combined_allowlist_and_denylist(self):
     # Fails with combined allowlist and denylist
-    with self.assertRaisesRegex(
-        ValueError,
-        r'`category_allowlist` and `category_denylist` are mutually '
-        r'exclusive options.'):
+    with self.assertRaisesRegex(ValueError, 'Invalid argument'):
       options = _AudioClassifierOptions(
           base_options=_BaseOptions(model_asset_path=self.yamnet_model_path),
           category_allowlist=['foo'],
@@ -302,8 +314,7 @@ class AudioClassifierTest(parameterized.TestCase):
     options = _AudioClassifierOptions(
         base_options=_BaseOptions(model_asset_path=self.yamnet_model_path),
         running_mode=_RUNNING_MODE.AUDIO_STREAM)
-    with self.assertRaisesRegex(ValueError,
-                                r'result callback must be provided'):
+    with self.assertRaisesRegex(ValueError, 'Invalid argument'):
       with _AudioClassifier.create_from_options(options) as unused_classifier:
         pass
 
@@ -312,8 +323,7 @@ class AudioClassifierTest(parameterized.TestCase):
         base_options=_BaseOptions(model_asset_path=self.yamnet_model_path),
         running_mode=_RUNNING_MODE.AUDIO_CLIPS,
         result_callback=mock.MagicMock())
-    with self.assertRaisesRegex(ValueError,
-                                r'result callback should not be provided'):
+    with self.assertRaisesRegex(ValueError, 'Invalid argument'):
       with _AudioClassifier.create_from_options(options) as unused_classifier:
         pass
 
@@ -323,8 +333,7 @@ class AudioClassifierTest(parameterized.TestCase):
         running_mode=_RUNNING_MODE.AUDIO_STREAM,
         result_callback=mock.MagicMock())
     with _AudioClassifier.create_from_options(options) as classifier:
-      with self.assertRaisesRegex(ValueError,
-                                  r'not initialized with the audio clips mode'):
+      with self.assertRaisesRegex(ValueError, 'Invalid argument'):
         classifier.classify(self._read_wav_file(_SPEECH_WAV_16K_MONO))
 
   def test_calling_classify_async_in_audio_clips_mode(self):
@@ -332,8 +341,7 @@ class AudioClassifierTest(parameterized.TestCase):
         base_options=_BaseOptions(model_asset_path=self.yamnet_model_path),
         running_mode=_RUNNING_MODE.AUDIO_CLIPS)
     with _AudioClassifier.create_from_options(options) as classifier:
-      with self.assertRaisesRegex(
-          ValueError, r'not initialized with the audio stream mode'):
+      with self.assertRaisesRegex(ValueError, 'Invalid argument'):
         classifier.classify_async(self._read_wav_file(_SPEECH_WAV_16K_MONO), 0)
 
   def test_classify_async_calls_with_illegal_timestamp(self):
@@ -343,8 +351,7 @@ class AudioClassifierTest(parameterized.TestCase):
         result_callback=mock.MagicMock())
     with _AudioClassifier.create_from_options(options) as classifier:
       classifier.classify_async(self._read_wav_file(_SPEECH_WAV_16K_MONO), 100)
-      with self.assertRaisesRegex(
-          ValueError, r'Input timestamp must be monotonically increasing'):
+      with self.assertRaisesRegex(ValueError, 'Invalid argument'):
         classifier.classify_async(self._read_wav_file(_SPEECH_WAV_16K_MONO), 0)
 
   @parameterized.parameters((_SPEECH_WAV_16K_MONO), (_SPEECH_WAV_48K_MONO))
