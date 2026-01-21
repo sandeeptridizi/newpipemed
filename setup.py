@@ -445,7 +445,8 @@ class BuildExtension(build_ext.build_ext):
 
 
 class BuildPy(build_py.build_py):
-  """Build command that generates protos, builds binary graphs and extension, builds python source, and performs a cleanup afterwards."""
+  """Build command that generates protos, builds binary graphs and extension,
+    builds python source, and performs a cleanup afterwards."""
 
   user_options = build_py.build_py.user_options + [
       ('link-opencv', None, 'if true, use the installed opencv library.'),
@@ -475,7 +476,8 @@ class BuildPy(build_py.build_py):
 
 
 class Install(install.install):
-  """Install command that generates protos, builds binary graphs and extension, builds python source, and performs a cleanup afterwards."""
+  """Install command that generates protos, builds binary graphs and extension,
+    builds python source, and performs a cleanup afterwards."""
 
   user_options = install.install.user_options + [
       ('link-opencv', None, 'if true, use the installed opencv library.'),
@@ -522,7 +524,9 @@ setuptools.setup(
     name='mediapipe',
     version=__version__,
     url='https://github.com/google/mediapipe',
-    description='MediaPipe is the simplest way for researchers and developers to build world-class ML solutions and applications for mobile, edge, cloud and the web.',
+    description=('MediaPipe is the simplest way for researchers and developers to '
+              'build world-class ML solutions and applications for mobile, '
+              'edge, cloud and the web.'),
     author='The MediaPipe Authors',
     author_email='mediapipe@google.com',
     long_description=_get_long_description(),
