@@ -277,7 +277,8 @@ class BuildExtension(build_ext.build_ext):
 
 
 class BuildPy(build_py.build_py):
-  """Build command that generates protos, builds binary graphs and extension, builds python source, and performs a cleanup afterwards."""
+  """Build command that generates protos, builds binary graphs and extension,
+    builds python source, and performs a cleanup afterwards."""
 
   user_options = build_py.build_py.user_options + [
       ('link-opencv', None, 'if true, use the installed opencv library.'),
@@ -301,7 +302,8 @@ class BuildPy(build_py.build_py):
 
 
 class Install(install.install):
-  """Install command that generates protos, builds binary graphs and extension, builds python source, and performs a cleanup afterwards."""
+  """Install command that generates protos, builds binary graphs and extension,
+    builds python source, and performs a cleanup afterwards."""
 
   user_options = install.install.user_options + [
       ('link-opencv', None, 'if true, use the installed opencv library.'),

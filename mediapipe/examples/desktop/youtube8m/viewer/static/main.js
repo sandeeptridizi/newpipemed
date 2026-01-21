@@ -25,7 +25,7 @@ const STATE_SPINNER=2;
 * @param {string} param The name of the parameter.
 * @return {?string} The parameter value or null if there is no such parameter.
 */
-var getUrlParameter = function(param) {
+const getUrlParameter = function(param) {
     const url = decodeURIComponent(window.location.search.substring(1));
     const url_parts = url.split('&');
     for (var i = 0; i < url_parts.length; i++) {
