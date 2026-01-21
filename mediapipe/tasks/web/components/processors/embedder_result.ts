@@ -42,7 +42,7 @@ function convertFromEmbeddingsProto(source: EmbeddingProto): Embedding {
       .slice();
   } else {
       const encodedValue = source.getQuantizedEmbedding()?.getValues() ?? '';
-      embedding.quantizedEmbedding = typeof encodedValue == 'string' ?
+      embedding.quantizedEmbedding = typeof encodedValue === 'string' ?
           Uint8Array.from(atob(encodedValue), c => c.charCodeAt(0)) : encodedValue;
   }
 
