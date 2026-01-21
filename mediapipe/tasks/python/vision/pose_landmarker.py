@@ -15,6 +15,7 @@
 
 import ctypes
 import dataclasses
+import enum
 from typing import Callable, Optional, Tuple
 
 from mediapipe.tasks.python.components.containers import landmark as landmark_lib
@@ -23,6 +24,7 @@ from mediapipe.tasks.python.core import async_result_dispatcher
 from mediapipe.tasks.python.core import base_options as base_options_lib
 from mediapipe.tasks.python.core import base_options_c as base_options_c_lib
 from mediapipe.tasks.python.core import mediapipe_c_bindings as mediapipe_c_bindings_lib
+from mediapipe.tasks.python.core import mediapipe_c_utils
 from mediapipe.tasks.python.core import serial_dispatcher
 from mediapipe.tasks.python.core.optional_dependencies import doc_controls
 from mediapipe.tasks.python.vision.core import image as image_lib
@@ -33,7 +35,6 @@ from mediapipe.tasks.python.vision.core import vision_task_running_mode as runni
 _BaseOptions = base_options_lib.BaseOptions
 _RunningMode = running_mode_lib.VisionTaskRunningMode
 _ImageProcessingOptions = image_processing_options_lib.ImageProcessingOptions
-_CFunction = mediapipe_c_bindings_lib.CFunction
 _AsyncResultDispatcher = async_result_dispatcher.AsyncResultDispatcher
 _LiveStreamPacket = async_result_dispatcher.LiveStreamPacket
 
@@ -104,6 +105,44 @@ class PoseLandmarkerResult:
         None if c_struct.segmentation_masks_count == 0 else segmentation_masks
     )
     return cls(pose_landmarks, pose_world_landmarks, segmentation_masks)
+
+
+class PoseLandmark(enum.IntEnum):
+  """The 33 pose landmarks."""
+
+  NOSE = 0
+  LEFT_EYE_INNER = 1
+  LEFT_EYE = 2
+  LEFT_EYE_OUTER = 3
+  RIGHT_EYE_INNER = 4
+  RIGHT_EYE = 5
+  RIGHT_EYE_OUTER = 6
+  LEFT_EAR = 7
+  RIGHT_EAR = 8
+  MOUTH_LEFT = 9
+  MOUTH_RIGHT = 10
+  LEFT_SHOULDER = 11
+  RIGHT_SHOULDER = 12
+  LEFT_ELBOW = 13
+  RIGHT_ELBOW = 14
+  LEFT_WRIST = 15
+  RIGHT_WRIST = 16
+  LEFT_PINKY = 17
+  RIGHT_PINKY = 18
+  LEFT_INDEX = 19
+  RIGHT_INDEX = 20
+  LEFT_THUMB = 21
+  RIGHT_THUMB = 22
+  LEFT_HIP = 23
+  RIGHT_HIP = 24
+  LEFT_KNEE = 25
+  RIGHT_KNEE = 26
+  LEFT_ANKLE = 27
+  RIGHT_ANKLE = 28
+  LEFT_HEEL = 29
+  RIGHT_HEEL = 30
+  LEFT_FOOT_INDEX = 31
+  RIGHT_FOOT_INDEX = 32
 
 
 class PoseLandmarksConnections:
@@ -238,29 +277,27 @@ class PoseLandmarkerOptions:
 
 
 _CTYPES_SIGNATURES = (
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpPoseLandmarkerCreate',
-        [
+        (
             ctypes.POINTER(PoseLandmarkerOptionsC),
             ctypes.POINTER(ctypes.c_void_p),
-        ],
-        ctypes.c_int32,
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpPoseLandmarkerDetectImage',
-        [
+        (
             ctypes.c_void_p,
             ctypes.c_void_p,
             ctypes.POINTER(
                 image_processing_options_c_lib.ImageProcessingOptionsC
             ),
             ctypes.POINTER(PoseLandmarkerResultC),
-        ],
-        ctypes.c_int32,
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpPoseLandmarkerDetectForVideo',
-        [
+        (
             ctypes.c_void_p,
             ctypes.c_void_p,
             ctypes.POINTER(
@@ -268,32 +305,27 @@ _CTYPES_SIGNATURES = (
             ),
             ctypes.c_int64,
             ctypes.POINTER(PoseLandmarkerResultC),
-        ],
-        ctypes.c_int32,
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpPoseLandmarkerDetectAsync',
-        [
+        (
             ctypes.c_void_p,
             ctypes.c_void_p,
             ctypes.POINTER(
                 image_processing_options_c_lib.ImageProcessingOptionsC
             ),
             ctypes.c_int64,
-        ],
-        ctypes.c_int32,
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CFunction(
         'MpPoseLandmarkerCloseResult',
         [ctypes.POINTER(PoseLandmarkerResultC)],
         None,
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpPoseLandmarkerClose',
-        [
-            ctypes.c_void_p,
-        ],
-        ctypes.c_int32,
+        (ctypes.c_void_p,),
     ),
 )
 
@@ -400,10 +432,9 @@ class PoseLandmarker:
         result_callback=c_callback,
     )
     landmarker = ctypes.c_void_p()
-    status = lib.MpPoseLandmarkerCreate(
+    lib.MpPoseLandmarkerCreate(
         ctypes.byref(ctypes_options), ctypes.byref(landmarker)
     )
-    mediapipe_c_bindings_lib.handle_status(status)
 
     return PoseLandmarker(
         lib, landmarker, dispatcher=dispatcher, async_callback=c_callback
@@ -438,14 +469,12 @@ class PoseLandmarker:
         if image_processing_options
         else None
     )
-    status = self._lib.MpPoseLandmarkerDetectImage(
+    self._lib.MpPoseLandmarkerDetectImage(
         self._handle,
         c_image,
         c_image_processing_options,
         ctypes.byref(result_c),
     )
-
-    mediapipe_c_bindings_lib.handle_status(status)
 
     result = PoseLandmarkerResult.from_ctypes(result_c)
     self._lib.MpPoseLandmarkerCloseResult(ctypes.byref(result_c))
@@ -487,15 +516,13 @@ class PoseLandmarker:
         if image_processing_options
         else None
     )
-    status = self._lib.MpPoseLandmarkerDetectForVideo(
+    self._lib.MpPoseLandmarkerDetectForVideo(
         self._handle,
         c_image,
         c_image_processing_options,
         timestamp_ms,
         ctypes.byref(result_c),
     )
-
-    mediapipe_c_bindings_lib.handle_status(status)
 
     result = PoseLandmarkerResult.from_ctypes(result_c)
     self._lib.MpPoseLandmarkerCloseResult(ctypes.byref(result_c))
@@ -544,27 +571,21 @@ class PoseLandmarker:
         if image_processing_options
         else None
     )
-    status = self._lib.MpPoseLandmarkerDetectAsync(
+    self._lib.MpPoseLandmarkerDetectAsync(
         self._handle,
         c_image,
         c_image_processing_options,
         timestamp_ms,
     )
-    mediapipe_c_bindings_lib.handle_status(status)
 
   def close(self):
     """Closes the PoseLandmarker."""
-    if self._handle:
-      error_msg = ctypes.c_char_p()
-      return_code = self._lib.MpPoseLandmarkerClose(
-          self._handle, ctypes.byref(error_msg)
-      )
-      mediapipe_c_bindings_lib.handle_return_code(
-          return_code, 'Failed to close PoseLandmarker', error_msg
-      )
-      self._handle = None
-      self._dispatcher.close()
-      self._lib.close()
+    if not self._handle:
+      return
+    self._lib.MpPoseLandmarkerClose(self._handle)
+    self._handle = None
+    self._dispatcher.close()
+    self._lib.close()
 
   def __enter__(self):
     """Returns `self` upon entering the runtime context."""

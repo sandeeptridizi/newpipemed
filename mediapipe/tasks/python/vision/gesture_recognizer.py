@@ -15,7 +15,7 @@
 
 import ctypes
 import dataclasses
-from typing import Callable, Tuple
+from typing import Callable, Optional, Tuple
 
 from mediapipe.tasks.python.components.processors import classifier_options
 from mediapipe.tasks.python.components.processors import classifier_options_c
@@ -23,6 +23,7 @@ from mediapipe.tasks.python.core import async_result_dispatcher
 from mediapipe.tasks.python.core import base_options as base_options_module
 from mediapipe.tasks.python.core import base_options_c
 from mediapipe.tasks.python.core import mediapipe_c_bindings
+from mediapipe.tasks.python.core import mediapipe_c_utils
 from mediapipe.tasks.python.core import serial_dispatcher
 from mediapipe.tasks.python.core.optional_dependencies import doc_controls
 from mediapipe.tasks.python.vision import gesture_recognizer_result as gesture_recognizer_result_module
@@ -37,10 +38,9 @@ _BaseOptions = base_options_module.BaseOptions
 _ClassifierOptions = classifier_options.ClassifierOptions
 _RunningMode = running_mode_module.VisionTaskRunningMode
 _ImageProcessingOptions = image_processing_options_lib.ImageProcessingOptions
-_GestureRecognizerResult = (
+GestureRecognizerResult = (
     gesture_recognizer_result_module.GestureRecognizerResult
 )
-_CFunction = mediapipe_c_bindings.CFunction
 
 
 _C_TYPES_RESULT_CALLBACK = ctypes.CFUNCTYPE(
@@ -101,29 +101,27 @@ class GestureRecognizerOptionsC(ctypes.Structure):
 
 
 _CTYPES_SIGNATURES = (
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpGestureRecognizerCreate',
-        [
+        (
             ctypes.POINTER(GestureRecognizerOptionsC),
             ctypes.POINTER(ctypes.c_void_p),
-        ],
-        ctypes.c_int,
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpGestureRecognizerRecognizeImage',
-        [
+        (
             ctypes.c_void_p,
             ctypes.c_void_p,
             ctypes.POINTER(image_processing_options_c.ImageProcessingOptionsC),
             ctypes.POINTER(
                 gesture_recognizer_result_c.GestureRecognizerResultC
             ),
-        ],
-        ctypes.c_int,
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpGestureRecognizerRecognizeForVideo',
-        [
+        (
             ctypes.c_void_p,
             ctypes.c_void_p,
             ctypes.POINTER(image_processing_options_c.ImageProcessingOptionsC),
@@ -131,30 +129,25 @@ _CTYPES_SIGNATURES = (
             ctypes.POINTER(
                 gesture_recognizer_result_c.GestureRecognizerResultC
             ),
-        ],
-        ctypes.c_int,
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpGestureRecognizerRecognizeAsync',
-        [
+        (
             ctypes.c_void_p,
             ctypes.c_void_p,
             ctypes.POINTER(image_processing_options_c.ImageProcessingOptionsC),
             ctypes.c_int64,
-        ],
-        ctypes.c_int,
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CFunction(
         'MpGestureRecognizerCloseResult',
         [ctypes.POINTER(gesture_recognizer_result_c.GestureRecognizerResultC)],
         None,
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         'MpGestureRecognizerClose',
-        [
-            ctypes.c_void_p,
-        ],
-        ctypes.c_int,
+        (ctypes.c_void_p,),
     ),
 )
 
@@ -203,9 +196,9 @@ class GestureRecognizerOptions:
   custom_gesture_classifier_options: _ClassifierOptions = dataclasses.field(
       default_factory=_ClassifierOptions
   )
-  result_callback: (
-      Callable[[_GestureRecognizerResult, image_lib.Image, int], None] | None
-  ) = None
+  result_callback: Optional[
+      Callable[[GestureRecognizerResult, image_lib.Image, int], None]
+  ] = None
 
 
 class GestureRecognizer:
@@ -290,9 +283,9 @@ class GestureRecognizer:
         ),
         image_ptr: ctypes.c_void_p,
         timestamp_ms: int,
-    ) -> Tuple[_GestureRecognizerResult, image_lib.Image, int]:
+    ) -> Tuple[GestureRecognizerResult, image_lib.Image, int]:
       c_result = c_result_ptr[0]
-      py_result = _GestureRecognizerResult.from_ctypes(c_result)
+      py_result = GestureRecognizerResult.from_ctypes(c_result)
       py_image = image_lib.Image.create_from_ctypes(image_ptr)
       return (py_result, py_image, timestamp_ms)
 
@@ -318,10 +311,10 @@ class GestureRecognizer:
         result_callback=c_callback,
     )
     recognizer_handle = ctypes.c_void_p()
-    status = lib.MpGestureRecognizerCreate(
-        ctypes.byref(options_c), ctypes.byref(recognizer_handle)
+    lib.MpGestureRecognizerCreate(
+        ctypes.byref(options_c),
+        ctypes.byref(recognizer_handle)
     )
-    mediapipe_c_bindings.handle_status(status)
     return cls(
         lib=lib,
         handle=recognizer_handle,
@@ -332,8 +325,8 @@ class GestureRecognizer:
   def recognize(
       self,
       image: image_lib.Image,
-      image_processing_options: _ImageProcessingOptions | None = None,
-  ) -> _GestureRecognizerResult:
+      image_processing_options: Optional[_ImageProcessingOptions] = None,
+  ) -> GestureRecognizerResult:
     """Performs hand gesture recognition on the given image.
 
     Only use this method when the GestureRecognizer is created with the image
@@ -361,15 +354,14 @@ class GestureRecognizer:
         if image_processing_options
         else None
     )
-    status = self._lib.MpGestureRecognizerRecognizeImage(
+    self._lib.MpGestureRecognizerRecognizeImage(
         self._handle,
         c_image,
         options_c,
         ctypes.byref(c_result),
     )
-    mediapipe_c_bindings.handle_status(status)
 
-    result = _GestureRecognizerResult.from_ctypes(c_result)
+    result = GestureRecognizerResult.from_ctypes(c_result)
     self._lib.MpGestureRecognizerCloseResult(ctypes.byref(c_result))
     return result
 
@@ -377,8 +369,8 @@ class GestureRecognizer:
       self,
       image: image_lib.Image,
       timestamp_ms: int,
-      image_processing_options: _ImageProcessingOptions | None = None,
-  ) -> _GestureRecognizerResult:
+      image_processing_options: Optional[_ImageProcessingOptions] = None,
+  ) -> GestureRecognizerResult:
     """Performs gesture recognition on the provided video frame.
 
     Only use this method when the GestureRecognizer is created with the video
@@ -408,16 +400,15 @@ class GestureRecognizer:
         if image_processing_options
         else None
     )
-    status = self._lib.MpGestureRecognizerRecognizeForVideo(
+    self._lib.MpGestureRecognizerRecognizeForVideo(
         self._handle,
         c_image,
         options_c,
         timestamp_ms,
         ctypes.byref(c_result),
     )
-    mediapipe_c_bindings.handle_status(status)
 
-    result = _GestureRecognizerResult.from_ctypes(c_result)
+    result = GestureRecognizerResult.from_ctypes(c_result)
     self._lib.MpGestureRecognizerCloseResult(ctypes.byref(c_result))
     return result
 
@@ -425,7 +416,7 @@ class GestureRecognizer:
       self,
       image: image_lib.Image,
       timestamp_ms: int,
-      image_processing_options: _ImageProcessingOptions | None = None,
+      image_processing_options: Optional[_ImageProcessingOptions] = None,
   ) -> None:
     """Sends live image data to perform gesture recognition.
 
@@ -463,22 +454,21 @@ class GestureRecognizer:
         if image_processing_options
         else None
     )
-    status = self._lib.MpGestureRecognizerRecognizeAsync(
+    self._lib.MpGestureRecognizerRecognizeAsync(
         self._handle,
         c_image,
         options_c,
         timestamp_ms,
     )
-    mediapipe_c_bindings.handle_status(status)
 
   def close(self):
     """Closes GestureRecognizer."""
-    if self._handle:
-      status = self._lib.MpGestureRecognizerClose(self._handle)
-      mediapipe_c_bindings.handle_status(status)
-      self._handle = None
-      self._dispatcher.close()
-      self._lib.close()
+    if not self._handle:
+      return
+    self._lib.MpGestureRecognizerClose(self._handle)
+    self._handle = None
+    self._dispatcher.close()
+    self._lib.close()
 
   def __enter__(self):
     """Returns `self` upon entering the runtime context."""

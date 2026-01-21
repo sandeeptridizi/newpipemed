@@ -23,13 +23,13 @@ from mediapipe.tasks.python.components.processors import classifier_options_c as
 from mediapipe.tasks.python.core import base_options as base_options_module
 from mediapipe.tasks.python.core import base_options_c as base_options_c_module
 from mediapipe.tasks.python.core import mediapipe_c_bindings as mediapipe_c_bindings_module
+from mediapipe.tasks.python.core import mediapipe_c_utils
 from mediapipe.tasks.python.core import serial_dispatcher
 
 _BaseOptions = base_options_module.BaseOptions
 Category = category_module.Category
 Classifications = classification_result_module.Classifications
 ClassifierOptions = classifier_options_module.ClassifierOptions
-_CFunction = mediapipe_c_bindings_module.CFunction
 
 
 @dataclasses.dataclass
@@ -137,31 +137,28 @@ class LanguageDetectorOptions:
 
 
 _CTYPES_SIGNATURES = (
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         "MpLanguageDetectorCreate",
-        [
+        (
             ctypes.POINTER(LanguageDetectorOptionsC),
             ctypes.POINTER(ctypes.c_void_p),
-        ],
-        ctypes.c_int,
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         "MpLanguageDetectorDetect",
-        [
+        (
             ctypes.c_void_p,
             ctypes.c_char_p,
             ctypes.POINTER(LanguageDetectorResultC),
-        ],
-        ctypes.c_int,
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CStatusFunction(
         "MpLanguageDetectorClose",
-        [
+        (
             ctypes.c_void_p,
-        ],
-        ctypes.c_int,
+        ),
     ),
-    _CFunction(
+    mediapipe_c_utils.CFunction(
         "MpLanguageDetectorCloseResult",
         [ctypes.POINTER(LanguageDetectorResultC)],
         None,
@@ -238,11 +235,10 @@ class LanguageDetector:
     ctypes_options = options.to_ctypes()
 
     detector_handle = ctypes.c_void_p()
-    status = lib.MpLanguageDetectorCreate(
+    lib.MpLanguageDetectorCreate(
         ctypes.byref(ctypes_options),
         ctypes.byref(detector_handle),
     )
-    mediapipe_c_bindings_module.handle_status(status)
     return LanguageDetector(lib=lib, handle=detector_handle)
 
   def detect(self, text: str) -> LanguageDetectorResult:
@@ -261,23 +257,22 @@ class LanguageDetector:
     """
     ctypes_result = LanguageDetectorResultC()
 
-    status = self._lib.MpLanguageDetectorDetect(
+    self._lib.MpLanguageDetectorDetect(
         self._detector_handle,
         text.encode("utf-8"),
         ctypes.byref(ctypes_result),
     )
-    mediapipe_c_bindings_module.handle_status(status)
     python_result = _convert_to_python_language_detector_result(ctypes_result)
     self._lib.MpLanguageDetectorCloseResult(ctypes.byref(ctypes_result))
     return python_result
 
   def close(self):
     """Shuts down the MediaPipe task instance."""
-    if self._detector_handle:
-      status = self._lib.MpLanguageDetectorClose(self._detector_handle)
-      mediapipe_c_bindings_module.handle_status(status)
-      self._detector_handle = None
-      self._lib.close()
+    if not self._detector_handle:
+      return
+    self._lib.MpLanguageDetectorClose(self._detector_handle)
+    self._detector_handle = None
+    self._lib.close()
 
   def __enter__(self):
     """Returns `self` upon entering the runtime context."""

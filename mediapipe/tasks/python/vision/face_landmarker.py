@@ -29,6 +29,7 @@ from mediapipe.tasks.python.core import async_result_dispatcher
 from mediapipe.tasks.python.core import base_options as base_options_lib
 from mediapipe.tasks.python.core import base_options_c as base_options_c_lib
 from mediapipe.tasks.python.core import mediapipe_c_bindings as mediapipe_c_bindings_lib
+from mediapipe.tasks.python.core import mediapipe_c_utils
 from mediapipe.tasks.python.core import serial_dispatcher
 from mediapipe.tasks.python.core.optional_dependencies import doc_controls
 from mediapipe.tasks.python.vision.core import image as image_lib
@@ -39,7 +40,7 @@ from mediapipe.tasks.python.vision.core import vision_task_running_mode as runni
 _BaseOptions = base_options_lib.BaseOptions
 _RunningMode = running_mode_lib.VisionTaskRunningMode
 _ImageProcessingOptions = image_processing_options_lib.ImageProcessingOptions
-_CFunction = mediapipe_c_bindings_lib.CFunction
+_CStatusFunction = mediapipe_c_utils.CStatusFunction
 _AsyncResultDispatcher = async_result_dispatcher.AsyncResultDispatcher
 _LiveStreamPacket = async_result_dispatcher.LiveStreamPacket
 
@@ -265,6 +266,34 @@ class FaceLandmarksConnections:
       Connection(103, 67),
       Connection(67, 109),
       Connection(109, 10),
+  ]
+
+  FACE_LANDMARKS_NOSE: List[Connection] = [
+      Connection(168, 6),
+      Connection(6, 197),
+      Connection(197, 195),
+      Connection(195, 5),
+      Connection(5, 4),
+      Connection(4, 1),
+      Connection(1, 19),
+      Connection(19, 94),
+      Connection(94, 2),
+      Connection(98, 97),
+      Connection(97, 2),
+      Connection(2, 326),
+      Connection(326, 327),
+      Connection(327, 294),
+      Connection(294, 278),
+      Connection(278, 344),
+      Connection(344, 440),
+      Connection(440, 275),
+      Connection(275, 4),
+      Connection(4, 45),
+      Connection(45, 220),
+      Connection(220, 115),
+      Connection(115, 48),
+      Connection(48, 64),
+      Connection(64, 98),
   ]
 
   FACE_LANDMARKS_CONTOURS: List[Connection] = (
@@ -2990,30 +3019,27 @@ class FaceLandmarkerOptions:
 
 
 _CTYPES_SIGNATURES = (
-    _CFunction(
-        'face_landmarker_create',
-        [
+    mediapipe_c_utils.CStatusFunction(
+        'MpFaceLandmarkerCreate',
+        (
             ctypes.POINTER(FaceLandmarkerOptionsC),
-            ctypes.POINTER(ctypes.c_char_p),
-        ],
-        ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_void_p),
+        ),
     ),
-    _CFunction(
-        'face_landmarker_detect_image',
-        [
+    mediapipe_c_utils.CStatusFunction(
+        'MpFaceLandmarkerDetectImage',
+        (
             ctypes.c_void_p,
             ctypes.c_void_p,
             ctypes.POINTER(
                 image_processing_options_c_lib.ImageProcessingOptionsC
             ),
             ctypes.POINTER(FaceLandmarkerResultC),
-            ctypes.POINTER(ctypes.c_char_p),
-        ],
-        ctypes.c_int,
+        ),
     ),
-    _CFunction(
-        'face_landmarker_detect_for_video',
-        [
+    mediapipe_c_utils.CStatusFunction(
+        'MpFaceLandmarkerDetectForVideo',
+        (
             ctypes.c_void_p,
             ctypes.c_void_p,
             ctypes.POINTER(
@@ -3021,35 +3047,27 @@ _CTYPES_SIGNATURES = (
             ),
             ctypes.c_int64,
             ctypes.POINTER(FaceLandmarkerResultC),
-            ctypes.POINTER(ctypes.c_char_p),
-        ],
-        ctypes.c_int,
+        ),
     ),
-    _CFunction(
-        'face_landmarker_detect_async',
-        [
+    mediapipe_c_utils.CStatusFunction(
+        'MpFaceLandmarkerDetectAsync',
+        (
             ctypes.c_void_p,
             ctypes.c_void_p,
             ctypes.POINTER(
                 image_processing_options_c_lib.ImageProcessingOptionsC
             ),
             ctypes.c_int64,
-            ctypes.POINTER(ctypes.c_char_p),
-        ],
-        ctypes.c_int,
+        ),
     ),
-    _CFunction(
-        'face_landmarker_close_result',
+    mediapipe_c_utils.CFunction(
+        'MpFaceLandmarkerCloseResult',
         [ctypes.POINTER(FaceLandmarkerResultC)],
         None,
     ),
-    _CFunction(
-        'face_landmarker_close',
-        [
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_char_p),
-        ],
-        ctypes.c_int,
+    mediapipe_c_utils.CStatusFunction(
+        'MpFaceLandmarkerClose',
+        (ctypes.c_void_p,),
     ),
 )
 
@@ -3156,18 +3174,10 @@ class FaceLandmarker:
         result_callback=c_callback,
     )
 
-    error_msg = ctypes.c_char_p()
-    landmarker = lib.face_landmarker_create(
-        ctypes.byref(options_c), ctypes.byref(error_msg)
+    landmarker = ctypes.c_void_p()
+    lib.MpFaceLandmarkerCreate(
+        ctypes.byref(options_c), ctypes.byref(landmarker)
     )
-    if not landmarker:
-      error_string = (
-          error_msg.value.decode('utf-8')
-          if error_msg.value is not None
-          else 'Internal Error'
-      )
-      raise RuntimeError('Failed to create FaceLandmarker: %s' % error_string)
-
     return FaceLandmarker(
         lib, landmarker, dispatcher=dispatcher, async_callback=c_callback
     )
@@ -3195,27 +3205,22 @@ class FaceLandmarker:
     """
     c_image = image._image_ptr  # pylint: disable=protected-access
     result_c = FaceLandmarkerResultC()
-    error_msg = ctypes.c_char_p()
 
     c_image_processing_options = (
         ctypes.byref(image_processing_options.to_ctypes())
         if image_processing_options
         else None
     )
-    return_code = self._lib.face_landmarker_detect_image(
+    self._lib.MpFaceLandmarkerDetectImage(
         self._handle,
         c_image,
         c_image_processing_options,
         ctypes.byref(result_c),
-        ctypes.byref(error_msg),
     )
-
-    mediapipe_c_bindings_lib.handle_return_code(
-        return_code, 'Face landmark detection failed', error_msg
-    )
-
-    result = FaceLandmarkerResult.from_ctypes(result_c)
-    self._lib.face_landmarker_close_result(ctypes.byref(result_c))
+    try:
+      result = FaceLandmarkerResult.from_ctypes(result_c)
+    finally:
+      self._lib.MpFaceLandmarkerCloseResult(ctypes.byref(result_c))
     return result
 
   def detect_for_video(
@@ -3248,29 +3253,23 @@ class FaceLandmarker:
     """
     c_image = image._image_ptr  # pylint: disable=protected-access
     result_c = FaceLandmarkerResultC()
-    error_msg = ctypes.c_char_p()
-
     c_image_processing_options = (
         ctypes.byref(image_processing_options.to_ctypes())
         if image_processing_options
         else None
     )
-    return_code = self._lib.face_landmarker_detect_for_video(
+    self._lib.MpFaceLandmarkerDetectForVideo(
         self._handle,
         c_image,
         c_image_processing_options,
         timestamp_ms,
         ctypes.byref(result_c),
-        ctypes.byref(error_msg),
     )
-
-    mediapipe_c_bindings_lib.handle_return_code(
-        return_code, 'Face landmark detection failed', error_msg
-    )
-
-    result = FaceLandmarkerResult.from_ctypes(result_c)
-    self._lib.face_landmarker_close_result(ctypes.byref(result_c))
-    return result
+    try:
+      py_result = FaceLandmarkerResult.from_ctypes(result_c)
+    finally:
+      self._lib.MpFaceLandmarkerCloseResult(ctypes.byref(result_c))
+    return py_result
 
   def detect_async(
       self,
@@ -3310,37 +3309,26 @@ class FaceLandmarker:
       RuntimeError: If the face landmark detection failed to run.
     """
     c_image = image._image_ptr  # pylint: disable=protected-access
-    error_msg = ctypes.c_char_p()
-
     c_image_processing_options = (
         ctypes.byref(image_processing_options.to_ctypes())
         if image_processing_options
         else None
     )
-    return_code = self._lib.face_landmarker_detect_async(
+    self._lib.MpFaceLandmarkerDetectAsync(
         self._handle,
         c_image,
         c_image_processing_options,
         timestamp_ms,
-        ctypes.byref(error_msg),
-    )
-    mediapipe_c_bindings_lib.handle_return_code(
-        return_code, 'Face landmark detection failed', error_msg
     )
 
   def close(self):
     """Closes the FaceLandmarker."""
-    if self._handle:
-      error_msg = ctypes.c_char_p()
-      return_code = self._lib.face_landmarker_close(
-          self._handle, ctypes.byref(error_msg)
-      )
-      mediapipe_c_bindings_lib.handle_return_code(
-          return_code, 'Failed to close FaceLandmarker', error_msg
-      )
-      self._handle = None
-      self._dispatcher.close()
-      self._lib.close()
+    if not self._handle:
+      return
+    self._lib.MpFaceLandmarkerClose(self._handle)
+    self._handle = None
+    self._dispatcher.close()
+    self._lib.close()
 
   def __enter__(self):
     """Returns `self` upon entering the runtime context."""

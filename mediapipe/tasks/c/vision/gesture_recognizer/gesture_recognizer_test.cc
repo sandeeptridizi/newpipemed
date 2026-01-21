@@ -16,6 +16,7 @@ limitations under the License.
 #include "mediapipe/tasks/c/vision/gesture_recognizer/gesture_recognizer.h"
 
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <string>
 
@@ -25,10 +26,11 @@ limitations under the License.
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "mediapipe/framework/deps/file_path.h"
+#include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
 #include "mediapipe/tasks/c/components/containers/landmark.h"
+#include "mediapipe/tasks/c/core/common.h"
 #include "mediapipe/tasks/c/core/mp_status.h"
-#include "mediapipe/tasks/c/vision/core/common.h"
 #include "mediapipe/tasks/c/vision/core/image.h"
 #include "mediapipe/tasks/c/vision/core/image_processing_options.h"
 #include "mediapipe/tasks/c/vision/core/image_test_util.h"
@@ -102,17 +104,21 @@ TEST(GestureRecognizerTest, ImageModeTest) {
                                              .score_threshold = 0.0}};
 
   MpGestureRecognizerPtr recognizer;
-  EXPECT_EQ(MpGestureRecognizerCreate(&options, &recognizer), kMpOk);
+  ASSERT_EQ(MpGestureRecognizerCreate(&options, &recognizer,
+                                      /* &error_msg= */ nullptr),
+            kMpOk);
   ASSERT_NE(recognizer, nullptr);
 
   GestureRecognizerResult result;
-  EXPECT_EQ(MpGestureRecognizerRecognizeImage(
-                recognizer, image.get(),
-                /* image_processing_options */ nullptr, &result),
-            kMpOk);
+  ASSERT_EQ(
+      MpGestureRecognizerRecognizeImage(recognizer, image.get(),
+                                        /* image_processing_options */ nullptr,
+                                        &result, /* &error_msg= */ nullptr),
+      kMpOk);
   MatchesGestureRecognizerResult(&result, kScorePrecision, kLandmarkPrecision);
   MpGestureRecognizerCloseResult(&result);
-  EXPECT_EQ(MpGestureRecognizerClose(recognizer), kMpOk);
+  EXPECT_EQ(MpGestureRecognizerClose(recognizer, /* &error_msg= */ nullptr),
+            kMpOk);
 }
 
 TEST(GestureRecognizerTest, VideoModeTest) {
@@ -132,21 +138,25 @@ TEST(GestureRecognizerTest, VideoModeTest) {
                                              .score_threshold = 0.0}};
 
   MpGestureRecognizerPtr recognizer;
-  EXPECT_EQ(MpGestureRecognizerCreate(&options, &recognizer), kMpOk);
+  ASSERT_EQ(MpGestureRecognizerCreate(&options, &recognizer,
+                                      /* &error_msg= */ nullptr),
+            kMpOk);
   ASSERT_NE(recognizer, nullptr);
 
   for (int i = 0; i < kIterations; ++i) {
     GestureRecognizerResult result;
-    EXPECT_EQ(MpGestureRecognizerRecognizeForVideo(
+    ASSERT_EQ(MpGestureRecognizerRecognizeForVideo(
                   recognizer, image.get(),
-                  /* image_processing_options */ nullptr, i, &result),
+                  /* image_processing_options */ nullptr, i, &result,
+                  /* &error_msg= */ nullptr),
               kMpOk);
 
     MatchesGestureRecognizerResult(&result, kScorePrecision,
                                    kLandmarkPrecision);
     MpGestureRecognizerCloseResult(&result);
   }
-  EXPECT_EQ(MpGestureRecognizerClose(recognizer), kMpOk);
+  EXPECT_EQ(MpGestureRecognizerClose(recognizer, /* &error_msg= */ nullptr),
+            kMpOk);
 }
 
 TEST(GestureRecognizerTest, ImageModeTestWithRotation) {
@@ -166,7 +176,9 @@ TEST(GestureRecognizerTest, ImageModeTestWithRotation) {
                                              .score_threshold = 0.0}};
 
   MpGestureRecognizerPtr recognizer;
-  EXPECT_EQ(MpGestureRecognizerCreate(&options, &recognizer), kMpOk);
+  EXPECT_EQ(MpGestureRecognizerCreate(&options, &recognizer,
+                                      /* &error_msg= */ nullptr),
+            kMpOk);
   ASSERT_NE(recognizer, nullptr);
 
   ImageProcessingOptions image_processing_options;
@@ -175,7 +187,8 @@ TEST(GestureRecognizerTest, ImageModeTestWithRotation) {
 
   GestureRecognizerResult result;
   EXPECT_EQ(MpGestureRecognizerRecognizeImage(
-                recognizer, image.get(), &image_processing_options, &result),
+                recognizer, image.get(), &image_processing_options, &result,
+                /* &error_msg= */ nullptr),
             kMpOk);
 
   ASSERT_EQ(result.gestures_count, 1);
@@ -186,7 +199,8 @@ TEST(GestureRecognizerTest, ImageModeTestWithRotation) {
             "Right");
 
   MpGestureRecognizerCloseResult(&result);
-  EXPECT_EQ(MpGestureRecognizerClose(recognizer), kMpOk);
+  EXPECT_EQ(MpGestureRecognizerClose(recognizer, /* &error_msg= */ nullptr),
+            kMpOk);
 }
 
 // A structure to support LiveStreamModeTest below. This structure holds a
@@ -237,16 +251,19 @@ TEST(GestureRecognizerTest, LiveStreamModeTest) {
   };
 
   MpGestureRecognizerPtr recognizer;
-  EXPECT_EQ(MpGestureRecognizerCreate(&options, &recognizer), kMpOk);
+  ASSERT_EQ(MpGestureRecognizerCreate(&options, &recognizer,
+                                      /* &error_msg= */ nullptr),
+            kMpOk);
   ASSERT_NE(recognizer, nullptr);
 
   absl::BlockingCounter counter(kIterations);
   LiveStreamModeCallback::blocking_counter = &counter;
 
   for (int i = 0; i < kIterations; ++i) {
-    EXPECT_EQ(
+    ASSERT_EQ(
         MpGestureRecognizerRecognizeAsync(
-            recognizer, image.get(), /* image_processing_options */ nullptr, i),
+            recognizer, image.get(), /* image_processing_options */ nullptr, i,
+            /* &error_msg= */ nullptr),
         kMpOk);
     // Short sleep so that MediaPipe does not drop frames.
     absl::SleepFor(absl::Milliseconds(kSleepBetweenFramesMilliseconds));
@@ -256,7 +273,8 @@ TEST(GestureRecognizerTest, LiveStreamModeTest) {
   counter.Wait();
   LiveStreamModeCallback::blocking_counter = nullptr;
 
-  EXPECT_EQ(MpGestureRecognizerClose(recognizer), kMpOk);
+  EXPECT_EQ(MpGestureRecognizerClose(recognizer, /* &error_msg= */ nullptr),
+            kMpOk);
 
   // Due to the flow limiter, the total of outputs might be smaller than the
   // number of iterations.
@@ -276,10 +294,15 @@ TEST(GestureRecognizerTest, InvalidArgumentHandling) {
       .canned_gestures_classifier_options = {},
       .custom_gestures_classifier_options = {}};
 
+  char* error_msg = nullptr;
   MpGestureRecognizerPtr recognizer = nullptr;
-  EXPECT_EQ(MpGestureRecognizerCreate(&options, &recognizer),
-            kMpInvalidArgument);
+  MpStatus status =
+      MpGestureRecognizerCreate(&options, &recognizer, &error_msg);
+  EXPECT_EQ(status, kMpInvalidArgument);
   EXPECT_EQ(recognizer, nullptr);
+  EXPECT_THAT(error_msg,
+              testing::HasSubstr("ExternalFile must specify at least one"));
+  MpErrorFree(error_msg);
 }
 
 TEST(GestureRecognizerTest, FailedRecognitionHandling) {
@@ -298,16 +321,25 @@ TEST(GestureRecognizerTest, FailedRecognitionHandling) {
   };
 
   MpGestureRecognizerPtr recognizer;
-  EXPECT_EQ(MpGestureRecognizerCreate(&options, &recognizer), kMpOk);
+  ASSERT_EQ(MpGestureRecognizerCreate(&options, &recognizer,
+                                      /* &error_msg= */ nullptr),
+            kMpOk);
   ASSERT_NE(recognizer, nullptr);
 
   const ScopedMpImage image = CreateEmptyGpuMpImage();
   GestureRecognizerResult result;
-  EXPECT_EQ(MpGestureRecognizerRecognizeImage(
-                recognizer, image.get(),
-                /* image_processing_options */ nullptr, &result),
-            kMpInvalidArgument);
-  EXPECT_EQ(MpGestureRecognizerClose(recognizer), kMpOk);
+
+  char* error_msg = nullptr;
+  MpStatus status = MpGestureRecognizerRecognizeImage(
+      recognizer, image.get(),
+      /* image_processing_options */ nullptr, &result, &error_msg);
+  EXPECT_EQ(status, kMpInvalidArgument);
+  EXPECT_THAT(error_msg, testing::HasSubstr(
+                             "PU input images are currently not supported"));
+  MpErrorFree(error_msg);
+
+  EXPECT_EQ(MpGestureRecognizerClose(recognizer, /* &error_msg= */ nullptr),
+            kMpOk);
 }
 
 }  // namespace

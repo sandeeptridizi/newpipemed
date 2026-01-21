@@ -53,8 +53,11 @@ class Packet {
   Packet(Packet&& p) = default;
   Packet& operator=(Packet&& p) = default;
 
+  // Checks if packet is empty.
+  bool IsEmpty() const { return packet_.IsEmpty(); }
+
   // Checks if packet is not empty.
-  explicit operator bool() const { return !packet_.IsEmpty(); }
+  explicit operator bool() const { return !IsEmpty(); }
 
   // Returns the payload.
   //
@@ -69,6 +72,8 @@ class Packet {
   mediapipe::Timestamp Timestamp() const { return packet_.Timestamp(); }
 
   const mediapipe::Packet& AsLegacyPacket() const { return packet_; }
+
+  mediapipe::Packet ConsumeAsLegacyPacket() && { return std::move(packet_); }
 
   // Debug info about the packet (type, timestamp).
   std::string DebugString() const { return packet_.DebugString(); }

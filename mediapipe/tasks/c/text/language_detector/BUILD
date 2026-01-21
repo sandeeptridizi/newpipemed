@@ -20,6 +20,7 @@ licenses(["notice"])
 
 LANGUAGE_DETECTOR_DEPS = [
     ":language_detector_result_converter",
+    "@com_google_absl//absl/log:absl_check",
     "@com_google_absl//absl/log:absl_log",
     "@com_google_absl//absl/status",
     "//mediapipe/tasks/c/components/processors:classifier_options",
@@ -124,6 +125,7 @@ cc_test(
         ":language_detector_lib",
         "//mediapipe/framework/deps:file_path",
         "//mediapipe/framework/port:gtest",
+        "//mediapipe/tasks/c/core:common",
         "//mediapipe/tasks/c/core:mp_status",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/strings",

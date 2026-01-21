@@ -30,8 +30,8 @@ limitations under the License.
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
 #include "mediapipe/tasks/c/components/containers/landmark.h"
+#include "mediapipe/tasks/c/core/common.h"
 #include "mediapipe/tasks/c/core/mp_status.h"
-#include "mediapipe/tasks/c/vision/core/common.h"
 #include "mediapipe/tasks/c/vision/core/image.h"
 #include "mediapipe/tasks/c/vision/core/image_processing_options.h"
 #include "mediapipe/tasks/c/vision/core/image_test_util.h"
@@ -145,19 +145,23 @@ TEST(FaceLandmarkerTest, ImageModeTest) {
       /* output_facial_transformation_matrixes = */ true,
   };
 
-  MpFaceLandmarkerPtr landmarker =
-      face_landmarker_create(&options, /* error_msg */ nullptr);
+  MpFaceLandmarkerPtr landmarker;
+  ASSERT_EQ(
+      MpFaceLandmarkerCreate(&options, &landmarker, /* error_msg= */ nullptr),
+      kMpOk);
   EXPECT_NE(landmarker, nullptr);
 
   FaceLandmarkerResult result;
-  face_landmarker_detect_image(landmarker, image.get(),
-                               /* image_processing_options= */ nullptr, &result,
-                               /* error_msg */ nullptr);
+  ASSERT_EQ(MpFaceLandmarkerDetectImage(landmarker, image.get(),
+                                        /* image_processing_options= */ nullptr,
+                                        &result,
+                                        /* error_msg= */ nullptr),
+            kMpOk);
   AssertFaceLandmarkerResult(&result, kBlendshapesPrecision,
                              kLandmarksPrecision,
                              kFacialTransformationMatrixPrecision);
-  face_landmarker_close_result(&result);
-  face_landmarker_close(landmarker, /* error_msg */ nullptr);
+  MpFaceLandmarkerCloseResult(&result);
+  EXPECT_EQ(MpFaceLandmarkerClose(landmarker, /* error_msg= */ nullptr), kMpOk);
 }
 
 TEST(FaceLandmarkerTest, ImageModeWithRotationTest) {
@@ -177,8 +181,10 @@ TEST(FaceLandmarkerTest, ImageModeWithRotationTest) {
       /* output_facial_transformation_matrixes = */ true,
   };
 
-  MpFaceLandmarkerPtr landmarker =
-      face_landmarker_create(&options, /* error_msg */ nullptr);
+  MpFaceLandmarkerPtr landmarker;
+  ASSERT_EQ(
+      MpFaceLandmarkerCreate(&options, &landmarker, /* error_msg= */ nullptr),
+      kMpOk);
   EXPECT_NE(landmarker, nullptr);
 
   ImageProcessingOptions image_processing_options;
@@ -186,14 +192,15 @@ TEST(FaceLandmarkerTest, ImageModeWithRotationTest) {
   image_processing_options.rotation_degrees = -90;
 
   FaceLandmarkerResult result;
-  face_landmarker_detect_image(landmarker, image.get(),
-                               &image_processing_options, &result,
-                               /* error_msg */ nullptr);
+  ASSERT_EQ(MpFaceLandmarkerDetectImage(landmarker, image.get(),
+                                        &image_processing_options, &result,
+                                        /* error_msg= */ nullptr),
+            kMpOk);
   AssertRotatedFaceLandmarkerResult(&result, kBlendshapesPrecision,
                                     kLandmarksPrecision,
                                     kFacialTransformationMatrixPrecision);
-  face_landmarker_close_result(&result);
-  face_landmarker_close(landmarker, /* error_msg */ nullptr);
+  MpFaceLandmarkerCloseResult(&result);
+  EXPECT_EQ(MpFaceLandmarkerClose(landmarker, /* error_msg= */ nullptr), kMpOk);
 }
 
 TEST(FaceLandmarkerTest, VideoModeTest) {
@@ -213,23 +220,26 @@ TEST(FaceLandmarkerTest, VideoModeTest) {
       /* output_facial_transformation_matrixes = */ true,
   };
 
-  MpFaceLandmarkerPtr landmarker =
-      face_landmarker_create(&options,
-                             /* error_msg */ nullptr);
+  MpFaceLandmarkerPtr landmarker;
+  ASSERT_EQ(
+      MpFaceLandmarkerCreate(&options, &landmarker, /* error_msg= */ nullptr),
+      kMpOk);
   EXPECT_NE(landmarker, nullptr);
 
   for (int i = 0; i < kIterations; ++i) {
     FaceLandmarkerResult result;
-    face_landmarker_detect_for_video(landmarker, image.get(),
-                                     /* image_processing_options= */ nullptr, i,
-                                     &result, /* error_msg */ nullptr);
+    ASSERT_EQ(
+        MpFaceLandmarkerDetectForVideo(landmarker, image.get(),
+                                       /* image_processing_options= */ nullptr,
+                                       i, &result, /* error_msg= */ nullptr),
+        kMpOk);
 
     AssertFaceLandmarkerResult(&result, kBlendshapesPrecision,
                                kLandmarksPrecision,
                                kFacialTransformationMatrixPrecision);
-    face_landmarker_close_result(&result);
+    MpFaceLandmarkerCloseResult(&result);
   }
-  face_landmarker_close(landmarker, /* error_msg */ nullptr);
+  EXPECT_EQ(MpFaceLandmarkerClose(landmarker, /* error_msg= */ nullptr), kMpOk);
 }
 
 // A structure to support LiveStreamModeTest below. This structure holds a
@@ -279,20 +289,21 @@ TEST(FaceLandmarkerTest, LiveStreamModeTest) {
       /* result_callback= */ LiveStreamModeCallback::Fn,
   };
 
-  MpFaceLandmarkerPtr landmarker =
-      face_landmarker_create(&options, /* error_msg */
-                             nullptr);
+  MpFaceLandmarkerPtr landmarker;
+  ASSERT_EQ(
+      MpFaceLandmarkerCreate(&options, &landmarker, /* error_msg= */ nullptr),
+      kMpOk);
   EXPECT_NE(landmarker, nullptr);
 
   absl::BlockingCounter counter(kIterations);
   LiveStreamModeCallback::blocking_counter = &counter;
 
   for (int i = 0; i < kIterations; ++i) {
-    EXPECT_GE(
-        face_landmarker_detect_async(landmarker, image.get(),
-                                     /* image_processing_options= */ nullptr, i,
-                                     /* error_msg */ nullptr),
-        0);
+    ASSERT_EQ(
+        MpFaceLandmarkerDetectAsync(landmarker, image.get(),
+                                    /* image_processing_options= */ nullptr, i,
+                                    /* error_msg= */ nullptr),
+        kMpOk);
     // Short sleep so that MediaPipe does not drop frames.
     absl::SleepFor(absl::Milliseconds(kSleepBetweenFramesMilliseconds));
   }
@@ -301,7 +312,7 @@ TEST(FaceLandmarkerTest, LiveStreamModeTest) {
   counter.Wait();
   LiveStreamModeCallback::blocking_counter = nullptr;
 
-  face_landmarker_close(landmarker, /* error_msg */ nullptr);
+  EXPECT_EQ(MpFaceLandmarkerClose(landmarker, /* error_msg= */ nullptr), kMpOk);
 
   // Due to the flow limiter, the total of outputs might be smaller than the
   // number of iterations.
@@ -320,21 +331,20 @@ TEST(FaceLandmarkerTest, InvalidArgumentHandling) {
       /* min_face_detection_confidence= */ 0.5,
       /* min_face_presence_confidence= */ 0.5,
       /* min_tracking_confidence= */ 0.5,
-      /* output_face_blendshapes = */ true,
-      /* output_facial_transformation_matrixes = */ true,
+      /* output_face_blendshapes = */ false,
+      /* output_facial_transformation_matrixes = */ false,
   };
 
-  char* error_msg;
-  MpFaceLandmarkerPtr landmarker = face_landmarker_create(&options, &error_msg);
+  char* error_msg = nullptr;
+  MpFaceLandmarkerPtr landmarker = nullptr;
+  MpStatus status = MpFaceLandmarkerCreate(&options, &landmarker, &error_msg);
+  EXPECT_EQ(status, kMpInvalidArgument);
   EXPECT_EQ(landmarker, nullptr);
 
-  EXPECT_THAT(
-      error_msg,
-      HasSubstr("INVALID_ARGUMENT: BLENDSHAPES Tag and blendshapes model must "
-                "be both set. Get BLENDSHAPES is set: true, blendshapes model "
-                "is set: false [MediaPipeTasksStatus='601']"));
+  EXPECT_THAT(error_msg,
+              HasSubstr("ExternalFile must specify at least one of "));
 
-  free(error_msg);
+  MpErrorFree(error_msg);
 }
 
 }  // namespace

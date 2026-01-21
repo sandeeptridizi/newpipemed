@@ -54,6 +54,20 @@ cc_library(
 )
 
 cc_library(
+    name = "webgpu_headers",
+    hdrs = ["webgpu_headers.h"],
+    deps = select({
+        "//mediapipe:emscripten": [
+            "//third_party/emdawnwebgpu:webgpu",
+        ],
+        "//conditions:default": [
+            "//third_party/dawn:dawn_headers",
+            "//third_party/dawn:webgpu_headers",
+        ],
+    }),
+)
+
+cc_library(
     name = "webgpu_check",
     srcs = ["webgpu_check.cc"],
     hdrs = ["webgpu_check.h"],
@@ -75,6 +89,7 @@ cc_library(
     hdrs = ["webgpu_service.h"],
     deps = [
         ":webgpu_check",
+        ":webgpu_headers",
         "//mediapipe/framework:graph_service",
         "//mediapipe/framework/deps:no_destructor",
         "//mediapipe/gpu:attachments",
@@ -99,13 +114,9 @@ cc_library(
     hdrs = ["webgpu_texture_view.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":webgpu_headers",
         "//mediapipe/gpu:gpu_buffer_storage",
-    ] + select({
-        "//mediapipe:emscripten": [],
-        "//conditions:default": [
-            "//third_party/dawn:webgpu_headers",
-        ],
-    }),
+    ],
 )
 
 cc_library(
@@ -117,6 +128,7 @@ cc_library(
         "//visibility:public",
     ],
     deps = [
+        ":webgpu_headers",
         ":webgpu_service",
         ":webgpu_texture_view",
         "//mediapipe/framework:legacy_calculator_support",
@@ -168,24 +180,75 @@ mediapipe_cc_test(
 )
 
 cc_library(
+    name = "webgpu_external_texture_buffer",
+    hdrs = ["webgpu_external_texture_buffer.h"],
+    tags = ["keep_dep"],
+    visibility = [
+        "//visibility:public",
+    ],
+    deps = [
+        ":webgpu_headers",
+        "//mediapipe/gpu:gpu_buffer_format",
+        "//mediapipe/gpu:gpu_buffer_storage",
+    ],
+    alwayslink = 1,
+)
+
+mediapipe_cc_test(
+    name = "webgpu_external_texture_buffer_test",
+    size = "small",
+    timeout = "short",
+    srcs = ["webgpu_external_texture_buffer_test.cc"],
+    browsers = ["//mediapipe/web:chrome-linux-hardware-gpu-webgpu"],
+    jspi = True,
+    platforms = ["wasm"],
+    wasm_tags = [
+        "requires-gpu-nvidia",
+    ],
+    deps = [
+        ":webgpu_external_quad_renderer",
+        ":webgpu_external_texture_buffer",
+        ":webgpu_headers",
+        ":webgpu_service",
+        ":webgpu_texture_view",
+        ":webgpu_utils",
+        "//mediapipe/framework:calculator_context",
+        "//mediapipe/framework:calculator_state",
+        "//mediapipe/framework:legacy_calculator_support",
+        "//mediapipe/framework/port:gtest",
+        "//mediapipe/framework/tool:tag_map_helper",
+        "//mediapipe/gpu:gpu_buffer",
+        "//mediapipe/gpu:gpu_buffer_format",
+        "//mediapipe/gpu:gpu_buffer_storage",
+        "@com_google_absl//absl/log:absl_check",
+        "@com_google_googletest//:gtest_main",
+    ] + select({
+        "//mediapipe:emscripten": [
+            ":setup_test_webgpu",
+            "//third_party/emdawnwebgpu:webgpu",
+            "//third_party/emscripten:embind",
+        ],
+        "//conditions:default": [
+            "//third_party/dawn:dawn_native",
+            "//third_party/dawn:libdawn_proc",
+        ],
+    }),
+)
+
+cc_library(
     name = "webgpu_utils",
     srcs = ["webgpu_utils.cc"],
     hdrs = ["webgpu_utils.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":webgpu_headers",
         "//mediapipe/framework/port:status",
         "//mediapipe/web:jspi_check",
-        "//third_party/dawn:webgpu_headers",
         "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
-    ] + select({
-        "//mediapipe:emscripten": [
-            "//third_party/emdawnwebgpu:webgpu",
-        ],
-        "//conditions:default": [],
-    }),
+    ],
 )
 
 cc_library(
@@ -193,6 +256,7 @@ cc_library(
     srcs = ["image_to_tensor_converter_webgpu_texture.cc"],
     hdrs = ["image_to_tensor_converter_webgpu_texture.h"],
     deps = [
+        ":webgpu_headers",
         ":webgpu_service",
         ":webgpu_texture_view",
         ":webgpu_utils",
@@ -213,6 +277,7 @@ cc_library(
     srcs = ["webgpu_shader_calculator.cc"],
     hdrs = ["webgpu_shader_calculator.h"],
     deps = [
+        ":webgpu_headers",
         ":webgpu_service",
         ":webgpu_shader_calculator_cc_proto",
         ":webgpu_texture_buffer",
@@ -233,7 +298,6 @@ cc_library(
         "//mediapipe/framework/port:status",
         "//mediapipe/gpu:gpu_buffer",
         "//mediapipe/gpu:gpu_buffer_format",
-        "//third_party/dawn:webgpu_headers",
         "@com_google_absl//absl/log:absl_log",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",

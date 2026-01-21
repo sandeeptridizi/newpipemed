@@ -20,6 +20,7 @@ licenses(["notice"])
 
 IMAGE_CLASSIFIER_DEPS = [
     "@com_google_absl//absl/log:absl_log",
+    "@com_google_absl//absl/log:absl_check",
     "@com_google_absl//absl/status",
     "@com_google_absl//absl/status:statusor",
     "//mediapipe/framework/formats:image",
@@ -32,7 +33,7 @@ IMAGE_CLASSIFIER_DEPS = [
     "//mediapipe/tasks/c/core:base_options_converter",
     "//mediapipe/tasks/c/core:mp_status",
     "//mediapipe/tasks/c/core:mp_status_converter",
-    "//mediapipe/tasks/c/vision/core:common",
+    "//mediapipe/tasks/c/core:common",
     "//mediapipe/tasks/c/vision/core:image",
     "//mediapipe/tasks/c/vision/core:image_frame_util",
     "//mediapipe/tasks/c/vision/core:image_processing_options",
@@ -76,8 +77,8 @@ cc_test(
         "//mediapipe/framework/deps:file_path",
         "//mediapipe/framework/port:gtest",
         "//mediapipe/tasks/c/components/containers:category",
+        "//mediapipe/tasks/c/core:common",
         "//mediapipe/tasks/c/core:mp_status",
-        "//mediapipe/tasks/c/vision/core:common",
         "//mediapipe/tasks/c/vision/core:image",
         "//mediapipe/tasks/c/vision/core:image_processing_options",
         "//mediapipe/tasks/c/vision/core:image_test_util",
