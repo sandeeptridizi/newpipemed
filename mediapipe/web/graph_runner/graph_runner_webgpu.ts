@@ -147,7 +147,6 @@ export function SupportWebGpu<TBase extends LibConstructor>(Base: TBase) {
     /**
      * Special variant of `closeGraph` for use with WebGPU demos built with
      * ASYNCIFY=1, to allow us to ensure proper synchronization.
-     * TODO: Remove when we have a better solution for async calls.
      */
     closeGraphAsync(): Promise<void> {
       return (this.wasmModule as unknown as WasmAsyncCloseModule).ccall(
